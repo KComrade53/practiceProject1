@@ -2,7 +2,7 @@
 use \Psr\Http\Message\ServerRequestInterface as Request;
 use \Psr\Http\Message\ResponseInterface as Response;
 
-require '../../vendor/autoload.php';
+require '../vendor/autoload.php';
 
 $config['displayErrorDetails'] = true;
 $config['addContentLengthHeader'] = false;
@@ -13,8 +13,9 @@ $config['db']['pass']   = 'password';
 $config['db']['dbname'] = 'exampleapp';
 
 $app = new \Slim\App(['settings' => $config]);
-
 $container = $app->getContainer();
+
+$container['view'] = new \Slim\Views\PhpRenderer('../templates/');
 
 $container['logger'] = function($c) {
     $logger = new \Monolog\Logger('my_logger');
@@ -32,13 +33,39 @@ $container['db'] = function ($c) {
     return $pdo;
 };
 
-$app->get('/hello/{name}', function (Request $request, Response $response, array $args) {
+$app->get('/tickets', function (Request $request, Response $response) {
+    $this->logger->addInfo("Ticket list");
+    $mapper = new TicketMapper($this->db);
+    $tickets = $mapper->getTickets();
+
+    $response = $this->view->render($response, 'tickets.phtml', ['tickets' => $tickets, 'router' => $this->router]);
+    return $response;
+});
+
+$app->post('/ticket/new', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+    $ticket_data = [];
+    $ticket_data['title'] = filter_var($data['title'], FILTER_SANITIZE_STRING);
+    $ticket_data['description'] = filter_var($data['description'], FILTER_SANITIZE_STRING);
+    // ...
+});
+
+$app->get('/ticket/{id}', function (Request $request, Response $response, $args) {
+    $ticket_id = (int)$args['id'];
+    $mapper = new TicketMapper($this->db);
+    $ticket = $mapper->getTicketById($ticket_id);
+
+    $response->getBody()->write(var_export($ticket, true));
+    return $response;
+})->setName('ticket-detail');
+
+ $app->get('/hello/{name}', function (Request $request, Response $response, array $args) {
     $name = $args['name'];
     $response->getBody()->write("Hello, $name");
     $this->logger->addInfo('Something interesting happened!');
     $mapper = new TicketMapper($this->db);
 
     return $response;
-});
+}); 
 
 $app->run();
